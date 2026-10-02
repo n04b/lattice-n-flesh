@@ -1,7 +1,7 @@
 'use strict';
 /* ===== Мышь и клавиатура ===== */
 let drag = null;
-cv.addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('contextmenu', e => e.preventDefault());   // меню браузера отключено на всей странице
 cv.addEventListener('pointerdown', e => {
   const x = e.offsetX, y = e.offsetY;
   let mode = null;

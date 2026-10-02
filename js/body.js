@@ -3,6 +3,23 @@
 const body = { mesh: null, workers: [], timer: 0, job: 0, resolve: null };
 const workerURL = URL.createObjectURL(new Blob([`(${mesherWorker})()`], { type: 'text/javascript' }));
 const MAX_SLICE = 16e6;     // сэмплов в одном слое Z
+// Если воркеры недоступны (например, страница открыта как file:// в строгом браузере),
+// мешер выполняется в основном потоке через объект с тем же интерфейсом, что у Worker.
+function inlineWorker() {
+  const w = { onmessage: null, onerror: null, dead: false, terminate() { this.dead = true; } };
+  const self = { postMessage: d => { if (!w.dead && w.onmessage) w.onmessage({ data: d }); } };
+  const handler = new Function('self', `(${mesherWorker})(); return self.onmessage;`)(self);
+  w.postMessage = msg => setTimeout(() => {
+    try { handler({ data: msg }); } catch (e) { if (w.onerror) w.onerror(e); }
+  }, 0);
+  return w;
+}
+let workersOK = true;
+try {
+  const probe = new Worker(workerURL);
+  probe.onerror = () => { workersOK = false; };
+  probe.terminate();
+} catch (e) { workersOK = false; }
 
 function bodyParams() {
   return { res: Math.max(parseFloat($('#b-res').value) || 0.2, 0.01), k: Math.max(parseFloat($('#b-smooth').value) || 0, 0) };
@@ -66,7 +83,8 @@ function buildBody(final) {
     let left = W;
     for (let w = 0; w < W; w++) {
       const z0 = 1 + Math.floor(planes * w / W), z1 = 1 + Math.floor(planes * (w + 1) / W);
-      const wk = new Worker(workerURL);
+      let wk;
+      try { wk = workersOK ? new Worker(workerURL) : inlineWorker(); } catch (e) { workersOK = false; wk = inlineWorker(); }
       body.workers.push(wk);
       wk.onmessage = ({ data }) => {
         if (job !== body.job) return resolve(null);
@@ -81,7 +99,14 @@ function buildBody(final) {
         const tris = (len3 / 9).toLocaleString('ru');
         resolve(finish(mesh, `${final ? 'Тело' : 'Черновик'}: ${tris} треуг., шаг ${fmt(h)} мм, ${((performance.now() - t0) / 1000).toFixed(1)} с`));
       };
-      wk.onerror = err => { if (job === body.job) { stopBuild(); toast('Ошибка построения: ' + err.message); resolve(finish(null, 'Ошибка построения')); } };
+      wk.onerror = err => {
+        if (job !== body.job) return;
+        if (workersOK && !(err instanceof Error)) {        // воркер не запустился — повтор в основном потоке
+          workersOK = false; err.preventDefault && err.preventDefault();
+          body.resolve = null; stopBuild(); return resolve(buildBody(final));
+        }
+        stopBuild(); toast('Ошибка построения: ' + err.message); resolve(finish(null, 'Ошибка построения'));
+      };
       wk.postMessage({ seg, rad, h, k, bmin, nx: n[0], ny: n[1], z0, z1 });
     }
   });
