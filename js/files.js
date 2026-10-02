@@ -44,7 +44,7 @@ $('#file').onchange = async e => {
     if (/\.obj$/i.test(f.name)) list = parseOBJ(text);
     else { const d = JSON.parse(text); list = (Array.isArray(d) ? d : d.edges).map(([a, b]) => [a.map(Number), b.map(Number)]); vl = d.vols; }
     pushHist(); edges = []; sel.clear(); resetOp();
-    if (vl) { vols = vl; vsel.clear(); volId = 1; walk(vols, n => { volId = Math.max(volId, n.id + 1); }); renderVolUI(); }
+    if (vl) { vols = migrateVols(vl); vsel.clear(); volId = 1; walk(vols, n => { volId = Math.max(volId, n.id + 1); }); renderVolUI(); }
     addEdges(list); changed(); fitView();
     toast(`Загружено рёбер: ${edges.length}`);
   } catch (err) { toast('Не удалось прочитать файл'); }

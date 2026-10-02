@@ -66,7 +66,7 @@ const serialize = () => JSON.stringify({ e: edges.map(e => [e.a, e.b]), v: vols 
 function restore(s) {
   const d = JSON.parse(s), list = Array.isArray(d) ? d : d.e;   // старый формат — просто массив рёбер
   edges = list.map(([a, b]) => ({ a, b }));
-  vols = Array.isArray(d) ? [] : d.v || [];
+  vols = Array.isArray(d) ? [] : migrateVols(d.v || []);
   sel.clear(); vsel.clear();
   volId = 1;
   walk(vols, n => { volId = Math.max(volId, n.id + 1); });

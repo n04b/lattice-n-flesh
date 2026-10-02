@@ -188,8 +188,8 @@ function renderInspector() {
       `<label class="chk"><input type="checkbox" data-k="mod.on"${m.on ? ' checked' : ''}> Включён</label>`,
       num('mod.thick', 'Толщина (радиус), мм', m.thick, 0.1),
       num('mod.blend', 'Сращивание, мм', m.blend || 0, 0.25),
-      num('mod.fall', 'Затухание, мм', m.fall, 0.5),
-      pick('mod.curve', 'Кривая спада', m.curve, CURVES),
+      `<label class="chk"><input type="checkbox" data-k="mod.fall"${m.fall ? ' checked' : ''}> Затухание к краю</label>`,
+      m.fall ? pick('mod.curve', 'Кривая спада', m.curve, CURVES) : '',
       pick('mod.mode', 'Смешивание', m.mode, MODES));
   } else if (n.kind === 'group' && n.op === 'folder') {
     h.push('<div class="hint">Папка: вложенные объёмы действуют каждый сам по себе.</div>');
@@ -212,7 +212,7 @@ insp.addEventListener('input', e => {
   o[last] = t.type === 'checkbox' ? t.checked : t.type === 'number' ? (parseFloat(t.value) || 0) : t.value;
   if (t.tagName === 'SELECT' || t.type === 'checkbox') inspArmed = true;
   renderOutliner(); changed();
-  if (k === 'op') renderInspector();
+  if (k === 'op' || k === 'mod.fall') renderInspector();
 });
 
 /* ----- кнопки ----- */

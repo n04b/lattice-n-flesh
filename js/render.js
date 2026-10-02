@@ -176,17 +176,12 @@ function drawVols() {
   const rec = (list, selected, root) => {
     for (const n of list) {
       if (n.hidden) continue;
-      const s = selected || vsel.has(n.id), isRoot = root && !(n.kind === 'group' && n.op === 'folder');
+      const s = selected || vsel.has(n.id);
       if (n.kind === 'group') { rec(n.children, s, root && n.op === 'folder'); continue; }
       const p = new Path2D();
       wirePath(nodeWires(n), p);
       const hov = act && ed.hoverVol === n.id;
       strokePath(p, s ? '#ffae42' : hov ? '#efe2ff' : act ? 'rgba(180,140,255,.9)' : 'rgba(180,140,255,.3)', s || hov ? 2 : 1.3);
-      if (act && isRoot && n.mod.on && n.mod.fall > 0) {
-        const q = new Path2D();
-        wirePath(nodeWires(n, n.mod.fall), q);
-        strokePath(q, 'rgba(180,140,255,.3)', 1, [4, 5]);
-      }
     }
   };
   rec(vols, false, true);

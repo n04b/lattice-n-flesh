@@ -88,7 +88,6 @@ const CURVES = {
   linear: ['Линейная', t => 1 - t],
   convex: ['Выпуклая', t => 1 - t * t],
   concave: ['Вогнутая', t => (1 - t) * (1 - t)],
-  step: ['Ступенька', () => 0],
 };
 const MODES = { max: 'Максимум', add: 'Сложение', sub: 'Вычитание' };
 const OPS = { folder: 'Папка', union: 'Объединение', subtract: 'Вычитание', intersect: 'Пересечение' };
@@ -104,7 +103,15 @@ function findNode(id, list = vols, parent = null) {
   }
   return null;
 }
-const defMod = () => ({ on: true, thick: 0.6, blend: 1.5, fall: 3, curve: 'smooth', mode: 'max' });
+const defMod = () => ({ on: true, thick: 0.6, blend: 1.5, fall: false, curve: 'smooth', mode: 'max' });
+// старые файлы: затухание было числом (мм наружу) — теперь это переключатель «к краю»
+function migrateVols(list) {
+  walk(list, n => {
+    if (typeof n.mod.fall !== 'boolean') n.mod.fall = false;
+    if (!CURVES[n.mod.curve]) n.mod.curve = 'smooth';
+  });
+  return list;
+}
 function newShape(type, pos) {
   const id = volId++;
   return { id, kind: 'shape', type, name: `${PRIM[type].name} ${id}`, pos: [...pos], rot: [0, 0, 0],
@@ -153,16 +160,41 @@ function collectMods(list = vols, out = []) {
   for (const n of list) {
     if (n.hidden) continue;
     if (n.kind === 'group' && n.op === 'folder') collectMods(n.children, out);
-    else if (n.mod.on && (n.mod.thick > 0 || n.mod.mode !== 'max')) out.push({ f: nodeSdf(n), ...n.mod });
+    else if (n.mod.on && (n.mod.thick > 0 || n.mod.mode !== 'max')) {
+      const f = nodeSdf(n);
+      out.push({ ...n.mod, f, depth: n.mod.fall ? maxDepth(n, f) : 0 });
+    }
   }
   return out;
 }
+// наибольшая глубина внутри формы (−min SDF): сетка 20³ по габаритам каркаса + 3 уточнения.
+// У полупространства глубина не ограничена — берётся половина размера рамки.
+function maxDepth(n, f) {
+  if (n.kind === 'shape' && n.type === 'half') return n.dims.s / 2;
+  const pts = nodeWires(n).flat();
+  if (!pts.length) return 0;
+  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const p of pts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
+  let best = Infinity, bp = mid(lo, hi);
+  for (let round = 0, G = 20; round < 4; round++, G = 6) {
+    const st = sub(hi, lo).map(v => v / G);
+    for (let i = 0; i <= G; i++) for (let j = 0; j <= G; j++) for (let k = 0; k <= G; k++) {
+      const p = [lo[0] + i * st[0], lo[1] + j * st[1], lo[2] + k * st[2]], d = f(p);
+      if (d < best) { best = d; bp = p; }
+    }
+    lo = sub(bp, st); hi = add(bp, st);      // уточнение вокруг лучшей точки
+  }
+  return Math.max(-best, 0);
+}
 // «мясо» в точке: r — толщина (радиус) стержня, k — радиус сращивания соседних стержней.
-// Внутри объёма — полные значения, снаружи — спад по кривой на дистанции затухания.
+// Действует только внутри объёма. Без затухания — полные значения во всём объёме;
+// с затуханием — максимум в самой глубокой точке и спад по кривой до нуля на поверхности.
 function fieldAt(p, mods) {
   let r = 0, k = 0;
   for (const m of mods) {
-    const d = m.f(p), w = d <= 0 ? 1 : d >= m.fall ? 0 : CURVES[m.curve][1](d / m.fall), v = m.thick * w;
+    const d = m.f(p);
+    if (d >= 0) continue;
+    const w = m.fall && m.depth > 0 ? CURVES[m.curve][1](clamp(1 + d / m.depth, 0, 1)) : 1, v = m.thick * w;
     r = m.mode === 'add' ? r + v : m.mode === 'sub' ? r - v : Math.max(r, v);
     k = Math.max(k, (m.blend || 0) * w);
   }

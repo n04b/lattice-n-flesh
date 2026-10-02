@@ -29,7 +29,7 @@ Group {
   id: int, kind: 'group', name, op: 'folder'|'union'|'subtract'|'intersect',
   k: float /* скругление CSG, мм */, children: Node[], hidden: bool, mod: Mod
 }
-Mod { on: bool, thick: мм, blend: мм, fall: мм, curve: 'smooth'|'linear'|'convex'|'concave'|'step',
+Mod { on: bool, thick: мм, blend: мм, fall: bool /* затухание к краю */, curve: 'smooth'|'linear'|'convex'|'concave',
       mode: 'max'|'add'|'sub' }
 vols: Node[]                  // корень; порядок = порядок применения модификаторов
 ```
@@ -60,6 +60,8 @@ vols: Node[]                  // корень; порядок = порядок �
 ```
 
 Загрузчик также принимает версию 1 (без `vols`) и просто массив рёбер.
+
+Миграция: в ранних файлах `mod.fall` было числом (мм затухания наружу). При загрузке нечисловое значение заменяется на `false`, неизвестная кривая (например, `step`) — на `smooth`.
 
 ## OBJ
 
